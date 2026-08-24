@@ -21,6 +21,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.16.4",
 ]
 
@@ -33,6 +34,18 @@ select = ["ALL"]
 extend-ignore = [
     # No need for copyright in source code.
     "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    # No need for __init__.py in tests.
+    "INP001",
+    # Pytest relies on asserts for testing.
+    "S101",
+    # Argument count is not important for unit tests.
+    "PLR0913",
+    # Positional argument count is not important for unit tests.
+    "PLR0917",
 ]
 
 [tool.ruff.lint.isort]
