@@ -46,6 +46,8 @@ extend-ignore = [
     "PLR0913",
     # Positional argument count is not important for unit tests.
     "PLR0917",
+    # Positional boolean arguments are fine for unit tests.
+    "FBT001",
 ]
 
 [tool.ruff.lint.isort]
