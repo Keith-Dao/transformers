@@ -259,18 +259,87 @@ class TestMultiHeadAttention:
         assert not torch.allclose(multi_head_attention.query_projection.bias, original_query_bias)
 
     @pytest.mark.parametrize(
-        ("query_shape", "key_shape", "value_shape", "match_str"),
+        ("query_shape", "key_shape", "value_shape", "exception_message"),
         [
-            pytest.param((16,), (16,), (16,), "Input shape must be two or three dimensional", id="1d"),
+            pytest.param((16,), (16,), (16,), "Query shape must be two or three dimensional, got 1.", id="query_1d"),
+            pytest.param((16, 2), (16,), (16,), "Key shape must be two or three dimensional, got 1.", id="key_1d"),
+            pytest.param(
+                (16, 2),
+                (16, 2),
+                (16,),
+                "Value shape must be two or three dimensional, got 1.",
+                id="value_1d",
+            ),
             pytest.param(
                 (2, 4, 16, 32),
                 (2, 4, 16, 32),
                 (2, 4, 16, 32),
-                "Input shape must be two or three dimensional",
-                id="4d",
+                "Query shape must be two or three dimensional, got 4.",
+                id="query_4d",
             ),
-            pytest.param((2, 8, 16), (8, 16), (2, 8, 16), "do not match", id="mismatched_dim_key_2d"),
-            pytest.param((2, 8, 16), (2, 8, 16, 4), (2, 8, 16), "do not match", id="mismatched_dim_key_4d"),
+            pytest.param(
+                (4, 16, 32),
+                (2, 4, 16, 32),
+                (2, 4, 16, 32),
+                "Key shape must be two or three dimensional, got 4.",
+                id="key_4d",
+            ),
+            pytest.param(
+                (4, 16, 32),
+                (4, 16, 32),
+                (2, 4, 16, 32),
+                "Value shape must be two or three dimensional, got 4.",
+                id="value_4d",
+            ),
+            pytest.param(
+                (3, 8, 16),
+                (2, 8, 16),
+                (2, 8, 16),
+                "The batch sizes for query (3), key (2) and/or value (2) do not match.",
+                id="query_mismatched_batch_size",
+            ),
+            pytest.param(
+                (2, 8, 16),
+                (3, 8, 16),
+                (2, 8, 16),
+                "The batch sizes for query (2), key (3) and/or value (2) do not match.",
+                id="key_mismatched_batch_size",
+            ),
+            pytest.param(
+                (2, 8, 16),
+                (2, 8, 16),
+                (3, 8, 16),
+                "The batch sizes for query (2), key (2) and/or value (3) do not match.",
+                id="value_mismatched_batch_size",
+            ),
+            pytest.param(
+                (2, 8, 32),
+                (2, 8, 16),
+                (2, 8, 16),
+                "The feature sizes for query (32), key (16) and/or value (16) do not match.",
+                id="query_mismatched_feature_dim",
+            ),
+            pytest.param(
+                (2, 8, 16),
+                (2, 8, 32),
+                (2, 8, 16),
+                "The feature sizes for query (16), key (32) and/or value (16) do not match.",
+                id="key_mismatched_feature_dim",
+            ),
+            pytest.param(
+                (2, 8, 16),
+                (2, 8, 16),
+                (2, 8, 32),
+                "The feature sizes for query (16), key (16) and/or value (32) do not match.",
+                id="value_mismatched_feature_dim",
+            ),
+            pytest.param(
+                (2, 10, 16),
+                (2, 8, 16),
+                (2, 9, 16),
+                "The sequence length for key (8) and value (9) do not match.",
+                id="mismatched_kv_seq_len",
+            ),
         ],
     )
     def test_forward_invalid_input_shape(
@@ -279,15 +348,17 @@ class TestMultiHeadAttention:
         query_shape: tuple[int, ...],
         key_shape: tuple[int, ...],
         value_shape: tuple[int, ...],
-        match_str: str,
+        exception_message: str,
     ) -> None:
         """Test that forward raises ValueError for incorrect or mismatched input tensor dimensions."""
         multi_head_attention = MultiHeadAttention(16, 4).to(device)
         query = torch.randn(*query_shape, device=device)
         key = torch.randn(*key_shape, device=device)
         value = torch.randn(*value_shape, device=device)
-        with pytest.raises(ValueError, match=match_str):
+        with pytest.raises(MultiHeadAttention.DimensionError) as exception_info:
             multi_head_attention(query, key, value)
+
+        assert str(exception_info.value) == exception_message
 
     @pytest.mark.parametrize("is_causal", [True, False])
     @pytest.mark.parametrize(
@@ -358,6 +429,20 @@ class TestMultiHeadAttention:
         for name, param in multi_head_attention.named_parameters():
             assert param.grad is not None, f"Gradient for {name} was not calculated."
             assert not param.grad.isnan().any()
+
+    def test_forward_cross_attention_different_sequence_lengths(self, device: str) -> None:
+        """Test that cross-attention works with different query and key/value sequence lengths."""
+        in_features, num_heads = 16, 4
+        seq_len_q, seq_len_kv = 5, 9
+        batch_size = 2
+
+        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
+        query = torch.randn(batch_size, seq_len_q, in_features, device=device)
+        key = torch.randn(batch_size, seq_len_kv, in_features, device=device)
+        value = torch.randn(batch_size, seq_len_kv, in_features, device=device)
+
+        output = multi_head_attention(query, key, value)
+        assert output.shape == (batch_size, seq_len_q, in_features)
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
     def test_forward_dtypes(self, device: str, dtype: torch.dtype) -> None:
