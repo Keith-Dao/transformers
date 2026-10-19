@@ -59,6 +59,16 @@ class MultiHeadAttention(torch.nn.Module):
             The output projection.
     """
 
+    class DimensionError(ValueError):
+        """Error for incorrect input dimensions values."""
+
+    class Dimensions:
+        """Dimension constants."""
+
+        BATCH = 0
+        SEQUENCE = 1
+        FEATURE = 2
+
     embed_dimension: int
     query_projection: torch.nn.Linear
     key_projection: torch.nn.Linear
@@ -121,33 +131,68 @@ class MultiHeadAttention(torch.nn.Module):
 
         Returns:
             The multihead attention output.
+
+        Raises:
+            DimensionError:
+                If any of the query, key or value are not 2- or 3-dimensional.
         """
-        expected_dimensions = 3
-        if query.dim() == expected_dimensions - 1:
-            query = query.unsqueeze(0)
 
-        if key.dim() == expected_dimensions - 1:
-            key = key.unsqueeze(0)
+        def normalise_and_validate_tensor(tensor: torch.Tensor, tensor_name: str) -> torch.Tensor:
+            """Ensures the tensor is 3-dimensional and validates its dimensions.
 
-        if value.dim() == expected_dimensions - 1:
-            value = value.unsqueeze(0)
+            If the input tensor is 2-dimensional, a batch dimension of 1 is added.
 
-        if query.dim() != expected_dimensions:
-            error_message = f"Input shape must be two or three dimensional, got {len(query.shape)}."
-            raise ValueError(error_message)
+            Args:
+                tensor:
+                    The input tensor to normalise and validate.
+                tensor_name:
+                    The display name of the tensor for error messages.
 
-        if not query.shape == key.shape == value.shape:
+            Returns:
+                The 3-dimensional tensor.
+
+            Raises:
+                DimensionError:
+                    If the tensor is not 2- or 3-dimensional.
+            """
+            expected_dimensions = 3
+            if tensor.dim() == expected_dimensions - 1:
+                tensor = tensor.unsqueeze(0)
+
+            if tensor.dim() != expected_dimensions:
+                error_message = f"{tensor_name} shape must be two or three dimensional, got {tensor.dim()}."
+                raise self.DimensionError(error_message)
+
+            return tensor
+
+        query = normalise_and_validate_tensor(query, "Query")
+        key = normalise_and_validate_tensor(key, "Key")
+        value = normalise_and_validate_tensor(value, "Value")
+
+        for dimension_name, dimension in [("batch", self.Dimensions.BATCH), ("feature", self.Dimensions.FEATURE)]:
+            if not query.shape[dimension] == key.shape[dimension] == value.shape[dimension]:
+                error_message = (
+                    f"The {dimension_name} sizes for query ({query.shape[dimension]}), key ({key.shape[dimension]}) "
+                    f"and/or value ({value.shape[dimension]}) do not match."
+                )
+                raise self.DimensionError(error_message)
+
+        if key.shape[self.Dimensions.SEQUENCE] != value.shape[self.Dimensions.SEQUENCE]:
             error_message = (
-                f"The shapes for query ({query.shape}), key ({key.shape}) and/or value ({value.shape}) do not match."
+                f"The sequence length for key ({key.shape[self.Dimensions.SEQUENCE]}) and value "
+                f"({value.shape[self.Dimensions.SEQUENCE]}) do not match."
             )
-            raise ValueError(error_message)
+            raise self.DimensionError(error_message)
 
-        batch_size, sequence_length, in_features = query.shape
+        batch_size, query_sequence_length, in_features = query.shape
+        _, kv_sequence_length, _ = key.shape
 
-        projection_shape = (batch_size, sequence_length, self.num_heads, self.embed_dimension)
-        query_embedding = self.query_projection(query).view(*projection_shape).transpose(1, 2)
-        key_embedding = self.key_projection(key).view(*projection_shape).transpose(1, 2)
-        value_embedding = self.value_projection(value).view(*projection_shape).transpose(1, 2)
+        query_projection_shape = (batch_size, query_sequence_length, self.num_heads, self.embed_dimension)
+        kv_projection_shape = (batch_size, kv_sequence_length, self.num_heads, self.embed_dimension)
+
+        query_embedding = self.query_projection(query).view(*query_projection_shape).transpose(1, 2)
+        key_embedding = self.key_projection(key).view(*kv_projection_shape).transpose(1, 2)
+        value_embedding = self.value_projection(value).view(*kv_projection_shape).transpose(1, 2)
 
         attention_output = scaled_dot_product_attention(
             query=query_embedding,
@@ -156,5 +201,7 @@ class MultiHeadAttention(torch.nn.Module):
             is_causal=is_causal,
         )
 
-        attention_output = attention_output.transpose(1, 2).contiguous().view(batch_size, sequence_length, in_features)
+        attention_output = (
+            attention_output.transpose(1, 2).contiguous().view(batch_size, query_sequence_length, in_features)
+        )
         return self.output_projection(attention_output)
