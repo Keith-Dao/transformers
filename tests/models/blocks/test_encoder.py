@@ -1,11 +1,11 @@
 """This module contains tests for the encoder block."""
 
-import constants
 import pytest
 import torch
 import torch.testing
 
 from models.blocks.encoder import EncoderBlock
+from tests import constants
 
 
 @pytest.mark.parametrize("device", constants.DEVICES)

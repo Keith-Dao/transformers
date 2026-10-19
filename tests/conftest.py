@@ -1,8 +1,9 @@
 """This module is the root config for pytest testing."""
 
-import constants
 import pytest
 import torch
+
+from tests import constants
 
 
 @pytest.fixture(params=constants.SEEDS)

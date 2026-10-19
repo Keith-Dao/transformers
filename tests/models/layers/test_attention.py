@@ -1,11 +1,11 @@
 """This module contains tests for the attention layer."""
 
-import constants
 import pytest
 import torch
 import torch.testing
 
 from models.layers.attention import MultiHeadAttention, scaled_dot_product_attention
+from tests import constants
 
 
 @pytest.mark.parametrize("device", constants.DEVICES)
