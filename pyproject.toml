@@ -3,14 +3,9 @@ name = "transformers"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Keith Dao", email = "keith.dao.248@gmail.com" }
-]
+authors = [{ name = "Keith Dao", email = "keith.dao.248@gmail.com" }]
 requires-python = ">=3.14"
-dependencies = [
-    "datasets>=5.0.1",
-    "torch>=2.13.0",
-]
+dependencies = ["datasets>=5.0.1", "torch>=2.13.0"]
 
 [project.scripts]
 transformers = "transformers:main"
@@ -21,6 +16,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pyrefly>=1.4.0",
+    "pyrefly-torch-stubs>=1.4.0",
     "pytest>=9.1.1",
     "ruff>=0.16.4",
 ]
@@ -60,3 +57,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-line-length = "dynamic"
+
+[tool.pyrefly]
+project-includes = ["src", "tests"]
+search-path = [".", "src"]
