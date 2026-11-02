@@ -1,6 +1,5 @@
-name: Tests
-run-name: "Running automated tests by @${{ github.actor }} (Commit: ${{ github.sha }})"
-
+name: CICD
+run-name: "Running CICD by @${{ github.actor }} (Commit: ${{ github.sha }})."
 on:
   pull_request:
     types:
@@ -11,37 +10,45 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
-  check-lint-status:
+  lint-and-format:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Verify linter and formatter passed
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-          WORKFLOW_NAME: "Linter and formatter"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          presist-credentials: true
+
+      - name: Install uv and Python 3.14
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Run ruff
         run: |
-          echo "Checking '$WORKFLOW_NAME' workflow status for commit: $COMMIT_SHA"
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
 
-          CONCLUSION=$(gh run list \
-            --workflow "$WORKFLOW_NAME" \
-            --commit "$COMMIT_SHA" \
-            --json conclusion \
-            --jq '.[0].conclusion')
+      - name: Run pyrefly
+        run: uv run pyrefly check
 
-          echo "Workflow conclusion is: $CONCLUSION"
-
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "❌ The original lint workflow did not succeed (Status: $CONCLUSION)."
-            echo "Please ensure the '$WORKFLOW_NAME' workflow passes before running tests."
-            exit 1
-          fi
-
-          echo "✅ Original lint workflow passed successfully!"
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "style: auto-format codebase."
 
   test:
     runs-on: ${{ matrix.os }}
-    needs: check-lint-status
+    needs: lint-and-format
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
