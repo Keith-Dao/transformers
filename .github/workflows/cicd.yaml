@@ -10,12 +10,26 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-
 jobs:
+  config:
+    runs-on: ubuntu-latest
+    env:
+      BASE_PYTHON_VERSION: "3.14"
+      PYTHON_VERSIONS: '["3.14, "3.15"]'
+      UV_VERSION: "0.13.6"
+    outputs:
+      base_python_version: ${{ env.BASE_PYTHON_VERSION }}
+      python_versions: ${{ env.PYTHON_VERSIONS }}
+      uv_version: ${{ env.UV_VERSION }}
+    steps:
+      - run: echo "Setting up config."
+
   lint-and-format:
     runs-on: ubuntu-latest
+    needs:
+      - config
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -23,11 +37,11 @@ jobs:
           ref: ${{ github.head_ref }}
           persist-credentials: true
 
-      - name: Install uv and Python 3.14
+      - name: Install uv and Python ${{ needs.config.outputs.base_python_version }}
         uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.6"
-          python-version: "3.14"
+          version: ${{ needs.config.outputs.uv_version }}
+          python-version: ${{ needs.config.outputs.base_python_version }}
           enable-cache: true
 
       - name: Install dependencies
@@ -48,7 +62,9 @@ jobs:
 
   test:
     runs-on: ${{ matrix.os }}
-    needs: lint-and-format
+    needs:
+      - config
+      - lint-and-format
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -56,9 +72,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        python-version:
-          - "3.14"
-          - "3.15"
+        python-version: ${{ fromJson(needs.config.outputs.python_versions) }}
 
     steps:
       - uses: actions/checkout@v7
@@ -66,16 +80,16 @@ jobs:
       - name: Install uv and Python ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.6"
+          version: ${{ needs.config.outputs.uv_version }}
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
-      - name: Install dependencies (3.14)
-        if: matrix.python-version == '3.14'
+      - name: Install dependencies (${{ needs.config.outputs.base_python_version }})
+        if: matrix.python-version == ${{ needs.config.outputs.base_python_version }}
         run: uv sync --locked --all-extras --dev
 
-      - name: Install dependencies (3.15+)
-        if: matrix.python-version != '3.14'
+      - name: Install dependencies (Not ${{ needs.config.outputs.base_python_version }})
+        if: matrix.python-version != ${{ needs.config.outputs.base_python_version }}
         run: uv sync --upgrade --all-extras --dev
 
       - name: Run tests
