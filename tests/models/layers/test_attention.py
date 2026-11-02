@@ -173,6 +173,64 @@ class TestCausalDotProductAttention:
         torch.testing.assert_close(original_output[:future_index], altered_output[:future_index])
 
 
+@pytest.fixture
+def in_features() -> int:
+    """Returns the number of input features.
+
+    Returns:
+        The number of input features.
+    """
+    return 16
+
+
+@pytest.fixture
+def num_heads() -> int:
+    """Returns the number of attention heads.
+
+    Returns:
+        The number of attention heads.
+    """
+    return 4
+
+
+@pytest.fixture
+def sequence_length() -> int:
+    """Returns the sequence length.
+
+    Returns:
+        The sequence length.
+    """
+    return 4
+
+
+@pytest.fixture
+def batch_size() -> int:
+    """Returns the batch size.
+
+    Returns:
+        The batch size.
+    """
+    return 2
+
+
+@pytest.fixture
+def multi_head_attention(in_features: int, num_heads: int, device: str) -> MultiHeadAttention:
+    """Returns a multi-head attention layer.
+
+    Args:
+        in_features:
+            The number of input features.
+        num_heads:
+            The number of attention heads.
+        device:
+            The device to store the multi-head attention layer on.
+
+    Retruns:
+        The multi-head attention layer.
+    """
+    return MultiHeadAttention(in_features, num_heads).to(device)
+
+
 @pytest.mark.parametrize("device", constants.DEVICES)
 @pytest.mark.usefixtures("seed")
 class TestMultiHeadAttention:
@@ -187,13 +245,11 @@ class TestMultiHeadAttention:
     )
     def test_initialization_valid(
         self,
-        device: str,
-        in_features: int,
+        multi_head_attention: MultiHeadAttention,
         num_heads: int,
         expected_embed_dimension: int,
     ) -> None:
         """Test initialization with valid dimensions."""
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
         assert multi_head_attention.num_heads == num_heads
         assert multi_head_attention.embed_dimension == expected_embed_dimension
 
@@ -209,10 +265,8 @@ class TestMultiHeadAttention:
         with pytest.raises(ValueError, match="is not divisible by the number of heads"):
             MultiHeadAttention(in_features, num_heads).to(device)
 
-    def test_reset_parameters(self, device: str) -> None:
+    def test_reset_parameters(self, multi_head_attention: MultiHeadAttention) -> None:
         """Test that resetting parameters reinitializes the projection weights and biases."""
-        multi_head_attention = MultiHeadAttention(16, 4).to(device)
-
         original_query_weight = multi_head_attention.query_projection.weight.clone()
         assert multi_head_attention.query_projection.bias is not None
         original_query_bias = multi_head_attention.query_projection.bias.clone()
@@ -337,6 +391,7 @@ class TestMultiHeadAttention:
     )
     def test_forward_invalid_input_shape(
         self,
+        multi_head_attention: MultiHeadAttention,
         device: str,
         query_shape: tuple[int, ...],
         key_shape: tuple[int, ...],
@@ -344,7 +399,6 @@ class TestMultiHeadAttention:
         exception_message: str,
     ) -> None:
         """Test that forward raises ValueError for incorrect or mismatched input tensor dimensions."""
-        multi_head_attention = MultiHeadAttention(16, 4).to(device)
         query = torch.randn(*query_shape, device=device)
         key = torch.randn(*key_shape, device=device)
         value = torch.randn(*value_shape, device=device)
@@ -363,15 +417,13 @@ class TestMultiHeadAttention:
     )
     def test_forward_output_shape(
         self,
+        multi_head_attention: MultiHeadAttention,
         device: str,
         is_causal: bool,
         input_shape: tuple[int, ...],
         expected_output_shape: tuple[int, ...],
     ) -> None:
         """Test forward output shape for both 2D and 3D inputs."""
-        in_features = input_shape[-1]
-        num_heads = 4
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
         query = torch.randn(*input_shape, device=device)
         key = torch.randn(*input_shape, device=device)
         value = torch.randn(*input_shape, device=device)
@@ -379,10 +431,14 @@ class TestMultiHeadAttention:
         output = multi_head_attention(query, key, value, is_causal=is_causal)
         assert output.shape == expected_output_shape
 
-    def test_forward_causal_future_independence(self, device: str) -> None:
+    def test_forward_causal_future_independence(
+        self,
+        multi_head_attention: MultiHeadAttention,
+        device: str,
+        in_features: int,
+        sequence_length: int,
+    ) -> None:
         """Test that causal masking in forward prevents future token leakage."""
-        in_features, num_heads, sequence_length = 16, 4, 4
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
         multi_head_attention.eval()
 
         query = torch.randn(2, sequence_length, in_features, device=device)
@@ -399,11 +455,14 @@ class TestMultiHeadAttention:
 
         torch.testing.assert_close(out1[:, :2], out2[:, :2])
 
-    def test_forward_gradients(self, device: str) -> None:
+    def test_forward_gradients(
+        self,
+        multi_head_attention: MultiHeadAttention,
+        device: str,
+        sequence_length: int,
+        in_features: int,
+    ) -> None:
         """Test that gradients flow back to projections and inputs."""
-        in_features, num_heads, sequence_length = 16, 4, 4
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
-
         query = torch.randn(2, sequence_length, in_features, device=device, requires_grad=True)
         key = torch.randn(2, sequence_length, in_features, device=device, requires_grad=True)
         value = torch.randn(2, sequence_length, in_features, device=device, requires_grad=True)
@@ -423,25 +482,35 @@ class TestMultiHeadAttention:
             assert param.grad is not None, f"Gradient for {name} was not calculated."
             assert not param.grad.isnan().any()
 
-    def test_forward_cross_attention_different_sequence_lengths(self, device: str) -> None:
+    def test_forward_cross_attention_different_sequence_lengths(
+        self,
+        multi_head_attention: MultiHeadAttention,
+        device: str,
+        in_features: int,
+    ) -> None:
         """Test that cross-attention works with different query and key/value sequence lengths."""
-        in_features, num_heads = 16, 4
-        seq_len_q, seq_len_kv = 5, 9
+        query_sequence_length = 5
+        kv_sequence_length = 9
         batch_size = 2
 
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(device)
-        query = torch.randn(batch_size, seq_len_q, in_features, device=device)
-        key = torch.randn(batch_size, seq_len_kv, in_features, device=device)
-        value = torch.randn(batch_size, seq_len_kv, in_features, device=device)
+        query = torch.randn(batch_size, query_sequence_length, in_features, device=device)
+        key = torch.randn(batch_size, kv_sequence_length, in_features, device=device)
+        value = torch.randn(batch_size, kv_sequence_length, in_features, device=device)
 
         output = multi_head_attention(query, key, value)
-        assert output.shape == (batch_size, seq_len_q, in_features)
+        assert output.shape == (batch_size, query_sequence_length, in_features)
 
     @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-    def test_forward_dtypes(self, device: str, dtype: torch.dtype) -> None:
+    def test_forward_dtypes(
+        self,
+        multi_head_attention: MultiHeadAttention,
+        device: str,
+        sequence_length: int,
+        in_features: int,
+        dtype: torch.dtype,
+    ) -> None:
         """Test MultiHeadAttention works with different floating point dtypes."""
-        in_features, num_heads, sequence_length = 16, 4, 4
-        multi_head_attention = MultiHeadAttention(in_features, num_heads).to(dtype).to(device)
+        multi_head_attention = multi_head_attention.to(dtype)
 
         query = torch.randn(2, sequence_length, in_features, dtype=dtype, device=device)
         key = torch.randn(2, sequence_length, in_features, dtype=dtype, device=device)
@@ -452,11 +521,17 @@ class TestMultiHeadAttention:
         assert output.shape == (2, sequence_length, in_features)
 
     @pytest.mark.parametrize("is_causal", [True, False])
-    def test_multi_head_attention_matches_pytorch(self, device: str, is_causal: bool) -> None:
+    def test_multi_head_attention_matches_pytorch(
+        self,
+        multi_head_attention: MultiHeadAttention,
+        device: str,
+        in_features: int,
+        num_heads: int,
+        batch_size: int,
+        sequence_length: int,
+        is_causal: bool,
+    ) -> None:
         """Test that MultiHeadAttention output matches torch.nn.MultiheadAttention output."""
-        in_features, num_heads, batch_size, sequence_length = 16, 4, 2, 8
-
-        custom_mha = MultiHeadAttention(in_features, num_heads).to(device)
         torch_mha = torch.nn.MultiheadAttention(
             embed_dim=in_features,
             num_heads=num_heads,
@@ -469,35 +544,35 @@ class TestMultiHeadAttention:
             torch_mha.in_proj_weight.copy_(
                 torch.cat(
                     [
-                        custom_mha.query_projection.weight,
-                        custom_mha.key_projection.weight,
-                        custom_mha.value_projection.weight,
+                        multi_head_attention.query_projection.weight,
+                        multi_head_attention.key_projection.weight,
+                        multi_head_attention.value_projection.weight,
                     ],
                     dim=0,
                 ),
             )
-            assert custom_mha.query_projection.bias is not None
-            assert custom_mha.key_projection.bias is not None
-            assert custom_mha.value_projection.bias is not None
+            assert multi_head_attention.query_projection.bias is not None
+            assert multi_head_attention.key_projection.bias is not None
+            assert multi_head_attention.value_projection.bias is not None
 
             torch_mha.in_proj_bias.copy_(
                 torch.cat(
                     [
-                        custom_mha.query_projection.bias,
-                        custom_mha.key_projection.bias,
-                        custom_mha.value_projection.bias,
+                        multi_head_attention.query_projection.bias,
+                        multi_head_attention.key_projection.bias,
+                        multi_head_attention.value_projection.bias,
                     ],
                     dim=0,
                 ),
             )
-            torch_mha.out_proj.weight.copy_(custom_mha.output_projection.weight)
-            torch_mha.out_proj.bias.copy_(custom_mha.output_projection.bias)
+            torch_mha.out_proj.weight.copy_(multi_head_attention.output_projection.weight)
+            torch_mha.out_proj.bias.copy_(multi_head_attention.output_projection.bias)
 
         query = torch.randn(batch_size, sequence_length, in_features, device=device)
         key = torch.randn(batch_size, sequence_length, in_features, device=device)
         value = torch.randn(batch_size, sequence_length, in_features, device=device)
 
-        custom_output = custom_mha(query, key, value, is_causal=is_causal)
+        custom_output = multi_head_attention(query, key, value, is_causal=is_causal)
         attn_mask = (
             torch.nn.Transformer.generate_square_subsequent_mask(sequence_length, device=torch.device(device))
             if is_causal

@@ -137,10 +137,10 @@ class TestEncoderArchitecture:
 
     def test_output_shape(
         self,
+        encoder: Encoder,
         device: str,
         vocab_size: int,
         embedding_dimensions: int,
-        encoder: Encoder,
     ) -> None:
         """Test output is the correct shape."""
         batch_size = 2
@@ -150,15 +150,15 @@ class TestEncoderArchitecture:
 
         assert output.shape == (batch_size, sequence_length, embedding_dimensions)
 
-    def test_vocab_size(self, vocab_size: int, encoder: Encoder) -> None:
+    def test_vocab_size(self, encoder: Encoder, vocab_size: int) -> None:
         """Test vocabulary size property."""
         assert encoder.vocab_size == vocab_size
 
-    def test_embedding_dimensions(self, embedding_dimensions: int, encoder: Encoder) -> None:
+    def test_embedding_dimensions(self, encoder: Encoder, embedding_dimensions: int) -> None:
         """Test embedding dimensions property."""
         assert encoder.embedding_dimensions == embedding_dimensions
 
-    def test_backward_pass(self, device: str, vocab_size: int, encoder: Encoder) -> None:
+    def test_backward_pass(self, encoder: Encoder, device: str, vocab_size: int) -> None:
         """Test that gradients are correctly backpropagated."""
         x = torch.randn(2, 5, vocab_size, device=device, requires_grad=True)
         output = encoder(x)
@@ -207,10 +207,10 @@ class TestDecoderArchitecture:
 
     def test_output_shape(
         self,
+        decoder: Decoder,
         device: str,
         vocab_size: int,
         embedding_dimensions: int,
-        decoder: Decoder,
     ) -> None:
         """Test output is the correct shape."""
         batch_size = 2
@@ -222,20 +222,20 @@ class TestDecoderArchitecture:
 
         assert output.shape == (batch_size, sequence_length_target, vocab_size)
 
-    def test_vocab_size(self, vocab_size: int, decoder: Decoder) -> None:
+    def test_vocab_size(self, decoder: Decoder, vocab_size: int) -> None:
         """Test vocabulary size property."""
         assert decoder.vocab_size == vocab_size
 
-    def test_embedding_dimensions(self, embedding_dimensions: int, decoder: Decoder) -> None:
+    def test_embedding_dimensions(self, decoder: Decoder, embedding_dimensions: int) -> None:
         """Test embedding dimensions property."""
         assert decoder.embedding_dimensions == embedding_dimensions
 
     def test_backward_pass(
         self,
+        decoder: Decoder,
         device: str,
         vocab_size: int,
         embedding_dimensions: int,
-        decoder: Decoder,
     ) -> None:
         """Test that gradients are correctly backpropagated."""
         x = torch.randn(2, 5, vocab_size, device=device, requires_grad=True)

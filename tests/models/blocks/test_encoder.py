@@ -8,13 +8,67 @@ from models.blocks.encoder import EncoderBlock
 from tests import constants
 
 
+@pytest.fixture
+def in_features() -> int:
+    """Returns the number of input features.
+
+    Returns:
+        The number of input features.
+    """
+    return 16
+
+
+@pytest.fixture
+def attention_heads() -> int:
+    """Returns the number of attention heads.
+
+    Returns:
+        The number of attention heads.
+    """
+    return 2
+
+
+@pytest.fixture
+def expansion_dimensions() -> int:
+    """Returns the number of expansion dimensions.
+
+    Returns:
+        The number of expansion dimensions.
+    """
+    return 32
+
+
+@pytest.fixture
+def encoder(in_features: int, attention_heads: int, expansion_dimensions: int, device: str) -> EncoderBlock:
+    """Retruns a encoder block.
+
+    Args:
+        in_features:
+            The number of input features.
+        attention_heads:
+            The number of attention heads in the block.
+        expansion_dimensions:
+            The number of expansion dimensions.
+        device:
+            The device to store the encoder on.
+
+    Returns:
+        The encoder block.
+    """
+    return EncoderBlock(
+        in_features=in_features,
+        attention_heads=attention_heads,
+        expansion_dimensions=expansion_dimensions,
+    ).to(device)
+
+
 @pytest.mark.parametrize("device", constants.DEVICES)
 @pytest.mark.usefixtures("seed")
 class TestEncoderBlock:
     """Tests EncoderBlock."""
 
     @pytest.mark.parametrize(
-        ("batch_size", "seq_len", "in_features", "attention_heads", "expansion_dimensions"),
+        ("batch_size", "sequence_length", "in_features", "attention_heads", "expansion_dimensions"),
         [
             pytest.param(1, 4, 16, 2, 32, id="small"),
             pytest.param(2, 8, 32, 4, 64, id="medium"),
@@ -22,71 +76,44 @@ class TestEncoderBlock:
     )
     def test_encoder_block_output_shape(
         self,
+        encoder: EncoderBlock,
         device: str,
         batch_size: int,
-        seq_len: int,
+        sequence_length: int,
         in_features: int,
-        attention_heads: int,
-        expansion_dimensions: int,
     ) -> None:
         """Test that the encoder block produces the correct output shape."""
-        block = EncoderBlock(
-            in_features=in_features,
-            attention_heads=attention_heads,
-            expansion_dimensions=expansion_dimensions,
-        ).to(device)
+        x = torch.randn(batch_size, sequence_length, in_features, device=device)
+        output = encoder(x)
 
-        x = torch.randn(batch_size, seq_len, in_features, device=device)
-        output = block(x)
+        assert output.shape == (batch_size, sequence_length, in_features)
 
-        assert output.shape == (batch_size, seq_len, in_features)
-
-    def test_encoder_block_backward_pass(self, device: str) -> None:
+    def test_encoder_block_backward_pass(self, encoder: EncoderBlock, in_features: int, device: str) -> None:
         """Test that gradients are correctly backpropagated through the encoder block."""
-        in_features = 16
-        attention_heads = 2
-        expansion_dimensions = 32
-
-        block = EncoderBlock(
-            in_features=in_features,
-            attention_heads=attention_heads,
-            expansion_dimensions=expansion_dimensions,
-        ).to(device)
-
         x = torch.randn(2, 5, in_features, device=device, requires_grad=True)
-        output = block(x)
+        output = encoder(x)
         loss = output.sum()
         loss.backward()
 
         assert x.grad is not None
         assert x.grad.shape == x.shape
-        for param in block.parameters():
+        for param in encoder.parameters():
             assert param.grad is not None
 
-    def test_reset_parameters(self, device: str) -> None:
+    def test_reset_parameters(self, encoder: EncoderBlock) -> None:
         """Test that resetting parameters reinitializes weights and biases across all sublayers."""
-        in_features = 16
-        attention_heads = 2
-        expansion_dimensions = 32
-
-        block = EncoderBlock(
-            in_features=in_features,
-            attention_heads=attention_heads,
-            expansion_dimensions=expansion_dimensions,
-        ).to(device)
-
         constant_value = 99.0
         with torch.no_grad():
-            for parameter in block.parameters():
+            for parameter in encoder.parameters():
                 parameter.fill_(constant_value)
 
         mha_layers = [
-            block.multihead_attention.query_projection,
-            block.multihead_attention.key_projection,
-            block.multihead_attention.value_projection,
-            block.multihead_attention.output_projection,
+            encoder.multihead_attention.query_projection,
+            encoder.multihead_attention.key_projection,
+            encoder.multihead_attention.value_projection,
+            encoder.multihead_attention.output_projection,
         ]
-        ffn_layers = [layer for layer in block.feed_forward_network if isinstance(layer, torch.nn.Linear)]
+        ffn_layers = [layer for layer in encoder.feed_forward_network if isinstance(layer, torch.nn.Linear)]
         all_layers = mha_layers + ffn_layers
 
         for layer in all_layers:
@@ -96,7 +123,7 @@ class TestEncoderBlock:
                 expected_bias = torch.full_like(layer.bias, constant_value)
                 assert torch.allclose(layer.bias, expected_bias), "Bias fill failed."
 
-        block.reset_parameters()
+        encoder.reset_parameters()
 
         for layer in all_layers:
             expected_weight = torch.full_like(layer.weight, constant_value)

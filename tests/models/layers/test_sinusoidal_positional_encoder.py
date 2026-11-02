@@ -8,6 +8,85 @@ from models.layers.sinusoidal_positional_encoder import SinusoidalPositionalEnco
 from tests import constants
 
 
+@pytest.fixture
+def max_sequence_length() -> int:
+    """Returns the maximum sequence length.
+
+    Returns:
+        The maximum sequence length.
+    """
+    return 20
+
+
+@pytest.fixture
+def in_features() -> int:
+    """Returns the number of input features.
+
+    Returns:
+        The number of input features.
+    """
+    return 16
+
+
+@pytest.fixture
+def sequence_length() -> int:
+    """Returns the sequence length.
+
+    Returns:
+        The sequence length.
+    """
+    return 8
+
+
+@pytest.fixture
+def batch_size() -> int:
+    """Returns the batch size.
+
+    Returns:
+        The batch size.
+    """
+    return 2
+
+
+@pytest.fixture
+def dropout_rate() -> float:
+    """Returns the dropout rate.
+
+    Returns:
+        The dropout rate.
+    """
+    return 0.0
+
+
+@pytest.fixture
+def positional_encoder(
+    max_sequence_length: int,
+    in_features: int,
+    dropout_rate: float,
+    device: str,
+) -> SinusoidalPositionalEncoder:
+    """Returns a sinusoidal positional encoder.
+
+    Args:
+        max_sequence_length:
+            The maximum sequence length.
+        in_features:
+            The number of input features.
+        dropout_rate:
+            The dropout rate.
+        device:
+            The device to store the positional encoder on.
+
+    Returns:
+        A sinusoidal positional encoder.
+    """
+    return SinusoidalPositionalEncoder(
+        max_sequence_length=max_sequence_length,
+        in_features=in_features,
+        dropout_rate=dropout_rate,
+    ).to(device)
+
+
 @pytest.mark.parametrize("device", constants.DEVICES)
 @pytest.mark.usefixtures("seed")
 class TestSinusoidalPositionalEncoder:
@@ -22,19 +101,13 @@ class TestSinusoidalPositionalEncoder:
     )
     def test_positional_encoder_output_shape(
         self,
+        positional_encoder: SinusoidalPositionalEncoder,
         device: str,
-        max_sequence_length: int,
         in_features: int,
         seq_len: int,
         batch_size: int,
     ) -> None:
         """Test that positional encoder produces the correct output shape."""
-        encoder = SinusoidalPositionalEncoder(
-            max_sequence_length=max_sequence_length,
-            in_features=in_features,
-            dropout_rate=0.0,
-        ).to(device)
-
         if batch_size == 1:
             x = torch.randn(seq_len, in_features, device=device)
             expected_shape = (seq_len, in_features)
@@ -42,37 +115,34 @@ class TestSinusoidalPositionalEncoder:
             x = torch.randn(batch_size, seq_len, in_features, device=device)
             expected_shape = (batch_size, seq_len, in_features)
 
-        output = encoder(x)
+        output = positional_encoder(x)
         assert output.shape == expected_shape
 
-    def test_positional_encoder_zero_input(self, device: str) -> None:
+    def test_positional_encoder_zero_input(
+        self,
+        positional_encoder: SinusoidalPositionalEncoder,
+        sequence_length: int,
+        in_features: int,
+        device: str,
+    ) -> None:
         """Test that with zero input and zero dropout, output equals the positional encodings."""
-        max_sequence_length = 20
-        in_features = 16
-        seq_len = 8
+        x = torch.zeros(sequence_length, in_features, device=device)
+        output = positional_encoder(x)
 
-        encoder = SinusoidalPositionalEncoder(
-            max_sequence_length=max_sequence_length,
-            in_features=in_features,
-            dropout_rate=0.0,
-        ).to(device)
-
-        x = torch.zeros(seq_len, in_features, device=device)
-        output = encoder(x)
-
-        expected = encoder.encodings[:seq_len]
+        expected = positional_encoder.encodings[:sequence_length]
         torch.testing.assert_close(output, expected)
 
-    def test_positional_encoder_backward_pass(self, device: str) -> None:
+    def test_positional_encoder_backward_pass(
+        self,
+        positional_encoder: SinusoidalPositionalEncoder,
+        batch_size: int,
+        sequence_length: int,
+        in_features: int,
+        device: str,
+    ) -> None:
         """Test that gradients are correctly backpropagated through the positional encoder."""
-        encoder = SinusoidalPositionalEncoder(
-            max_sequence_length=50,
-            in_features=16,
-            dropout_rate=0.0,
-        ).to(device)
-
-        x = torch.randn(2, 10, 16, device=device, requires_grad=True)
-        output = encoder(x)
+        x = torch.randn(batch_size, sequence_length, in_features, device=device, requires_grad=True)
+        output = positional_encoder(x)
         loss = output.sum()
         loss.backward()
 
