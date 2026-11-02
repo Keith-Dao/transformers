@@ -160,7 +160,9 @@ class TestEncoderArchitecture:
 
     def test_backward_pass(self, encoder: Encoder, device: str, vocab_size: int) -> None:
         """Test that gradients are correctly backpropagated."""
-        x = torch.randn(2, 5, vocab_size, device=device, requires_grad=True)
+        batch_size = 2
+        sequence_length = 5
+        x = torch.randn(batch_size, sequence_length, vocab_size, device=device, requires_grad=True)
         output = encoder(x)
         loss = output.sum()
         loss.backward()
@@ -214,13 +216,13 @@ class TestDecoderArchitecture:
     ) -> None:
         """Test output is the correct shape."""
         batch_size = 2
-        sequence_length_target = 8
-        sequence_length_source = 12
-        x = torch.randn(batch_size, sequence_length_target, vocab_size, device=device)
-        encoder_output = torch.randn(batch_size, sequence_length_source, embedding_dimensions, device=device)
+        target_sequence_length = 8
+        source_sequence_length = 12
+        x = torch.randn(batch_size, target_sequence_length, vocab_size, device=device)
+        encoder_output = torch.randn(batch_size, source_sequence_length, embedding_dimensions, device=device)
         output = decoder(x, encoder_output)
 
-        assert output.shape == (batch_size, sequence_length_target, vocab_size)
+        assert output.shape == (batch_size, target_sequence_length, vocab_size)
 
     def test_vocab_size(self, decoder: Decoder, vocab_size: int) -> None:
         """Test vocabulary size property."""
@@ -238,8 +240,17 @@ class TestDecoderArchitecture:
         embedding_dimensions: int,
     ) -> None:
         """Test that gradients are correctly backpropagated."""
-        x = torch.randn(2, 5, vocab_size, device=device, requires_grad=True)
-        encoder_output = torch.randn(2, 6, embedding_dimensions, device=device, requires_grad=True)
+        batch_size = 2
+        target_sequence_length = 5
+        source_sequence_length = 6
+        x = torch.randn(batch_size, target_sequence_length, vocab_size, device=device, requires_grad=True)
+        encoder_output = torch.randn(
+            batch_size,
+            source_sequence_length,
+            embedding_dimensions,
+            device=device,
+            requires_grad=True,
+        )
         output = decoder(x, encoder_output)
         loss = output.sum()
         loss.backward()

@@ -442,18 +442,20 @@ class TestMultiHeadAttention:
         multi_head_attention.eval()
 
         query = torch.randn(2, sequence_length, in_features, device=device)
-        key1 = torch.randn(2, sequence_length, in_features, device=device)
-        value1 = torch.randn(2, sequence_length, in_features, device=device)
+        original_key = torch.randn(2, sequence_length, in_features, device=device)
+        original_value = torch.randn(2, sequence_length, in_features, device=device)
 
-        key2 = key1.clone()
-        value2 = value1.clone()
-        key2[:, 2:] += torch.randn_like(key2[:, 2:])
-        value2[:, 2:] += torch.randn_like(value2[:, 2:])
+        modified_key = original_key.clone()
+        modified_value = original_value.clone()
+        change_index = 2
+        modified_key[:, change_index:] += torch.randn_like(modified_key[:, change_index:])
+        modified_value[:, change_index:] += torch.randn_like(modified_value[:, change_index:])
 
-        out1 = multi_head_attention(query, key1, value1, is_causal=True)
-        out2 = multi_head_attention(query, key2, value2, is_causal=True)
+        original_output = multi_head_attention(query, original_key, original_value, is_causal=True)
+        modified_output = multi_head_attention(query, modified_key, modified_value, is_causal=True)
 
-        torch.testing.assert_close(out1[:, :2], out2[:, :2])
+        torch.testing.assert_close(original_output[:, :change_index], modified_output[:, :change_index])
+        assert not torch.allclose(original_output[:, change_index:], modified_output[:, change_index:])
 
     def test_forward_gradients(
         self,
@@ -510,15 +512,16 @@ class TestMultiHeadAttention:
         dtype: torch.dtype,
     ) -> None:
         """Test MultiHeadAttention works with different floating point dtypes."""
+        batch_size = 2
         multi_head_attention = multi_head_attention.to(dtype)
 
-        query = torch.randn(2, sequence_length, in_features, dtype=dtype, device=device)
-        key = torch.randn(2, sequence_length, in_features, dtype=dtype, device=device)
-        value = torch.randn(2, sequence_length, in_features, dtype=dtype, device=device)
+        query = torch.randn(batch_size, sequence_length, in_features, dtype=dtype, device=device)
+        key = torch.randn(batch_size, sequence_length, in_features, dtype=dtype, device=device)
+        value = torch.randn(batch_size, sequence_length, in_features, dtype=dtype, device=device)
 
         output = multi_head_attention(query, key, value)
         assert output.dtype == dtype
-        assert output.shape == (2, sequence_length, in_features)
+        assert output.shape == (batch_size, sequence_length, in_features)
 
     @pytest.mark.parametrize("is_causal", [True, False])
     def test_multi_head_attention_matches_pytorch(
