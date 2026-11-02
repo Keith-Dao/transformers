@@ -31,7 +31,7 @@ jobs:
           uv run ruff format --check .
 
       - name: Run pyrefly
-        run: pyrefly check
+        run: uv run pyrefly check
 
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
