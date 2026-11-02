@@ -184,11 +184,23 @@ class TestEncoderArchitecture:
         encoder_blocks = encoder.encoder_blocks
 
         for layer in linear_layers:
-            assert torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), "Weight fill failed."
+            torch.testing.assert_close(
+                layer.weight,
+                torch.full_like(layer.weight, constant_value),
+                msg="Weight fill failed.",
+            )
             if layer.bias is not None:
-                assert torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias fill failed."
+                torch.testing.assert_close(
+                    layer.bias,
+                    torch.full_like(layer.bias, constant_value),
+                    msg="Bias fill failed.",
+                )
         for parameter in encoder_blocks.parameters():
-            assert torch.allclose(parameter, torch.full_like(parameter, constant_value)), "Parameter fill failed."
+            torch.testing.assert_close(
+                parameter,
+                torch.full_like(parameter, constant_value),
+                msg="Parameter fill failed.",
+            )
 
         encoder.reset_parameters()
 
@@ -274,12 +286,22 @@ class TestDecoderArchitecture:
         decoder_blocks = decoder.decoder_blocks
 
         for layer in linear_layers:
-            assert torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), "Weight fill failed."
+            torch.testing.assert_close(
+                layer.weight,
+                torch.full_like(layer.weight, constant_value),
+                msg="Weight fill failed.",
+            )
             if layer.bias is not None:
-                assert torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias fill failed."
+                torch.testing.assert_close(
+                    layer.bias,
+                    torch.full_like(layer.bias, constant_value),
+                    msg="Bias fill failed.",
+                )
         for parameter in decoder_blocks.parameters():
-            assert torch.allclose(parameter, torch.full_like(parameter, constant_value)), (
-                "Decoder block parameter fill failed."
+            torch.testing.assert_close(
+                parameter,
+                torch.full_like(parameter, constant_value),
+                msg="Decoder block parameter fill failed.",
             )
 
         decoder.reset_parameters()

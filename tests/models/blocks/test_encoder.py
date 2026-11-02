@@ -118,10 +118,18 @@ class TestEncoderBlock:
 
         for layer in all_layers:
             expected_weight = torch.full_like(layer.weight, constant_value)
-            assert torch.allclose(layer.weight, expected_weight), "Weight fill failed."
+            torch.testing.assert_close(
+                layer.weight,
+                expected_weight,
+                msg="Weight fill failed.",
+            )
             if layer.bias is not None:
                 expected_bias = torch.full_like(layer.bias, constant_value)
-                assert torch.allclose(layer.bias, expected_bias), "Bias fill failed."
+                torch.testing.assert_close(
+                    layer.bias,
+                    expected_bias,
+                    msg="Bias fill failed.",
+                )
 
         encoder.reset_parameters()
 
