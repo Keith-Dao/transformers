@@ -14,6 +14,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          presist-credentials: true
 
       - name: Install uv and Python 3.14
         uses: astral-sh/setup-uv@v10.3.3
@@ -36,4 +39,4 @@ jobs:
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commmit_message: "style: auto-format codebase."
+          commit_message: "style: auto-format codebase."
