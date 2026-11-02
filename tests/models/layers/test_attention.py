@@ -217,18 +217,10 @@ class TestMultiHeadAttention:
         assert multi_head_attention.query_projection.bias is not None
         original_query_bias = multi_head_attention.query_projection.bias.clone()
 
-        constant_weight_value = 1.23
-        constant_bias_value = 4.56
+        constant_value = 99.0
         with torch.no_grad():
-            for layer in [
-                multi_head_attention.query_projection,
-                multi_head_attention.key_projection,
-                multi_head_attention.value_projection,
-                multi_head_attention.output_projection,
-            ]:
-                layer.weight.fill_(constant_weight_value)
-                if layer.bias is not None:
-                    layer.bias.fill_(constant_bias_value)
+            for parameter in multi_head_attention.parameters():
+                parameter.fill_(constant_value)
 
         for layer in [
             multi_head_attention.query_projection,
@@ -236,11 +228,11 @@ class TestMultiHeadAttention:
             multi_head_attention.value_projection,
             multi_head_attention.output_projection,
         ]:
-            expected_weight = torch.full_like(layer.weight, constant_weight_value)
-            torch.testing.assert_close(layer.weight, expected_weight)
+            expected_weight = torch.full_like(layer.weight, constant_value)
+            torch.testing.assert_close(layer.weight, expected_weight), "Weight fill failed."
             if layer.bias is not None:
-                expected_bias = torch.full_like(layer.bias, constant_bias_value)
-                torch.testing.assert_close(layer.bias, expected_bias)
+                expected_bias = torch.full_like(layer.bias, constant_value)
+                torch.testing.assert_close(layer.bias, expected_bias), "Bias fill failed."
 
         multi_head_attention.reset_parameters()
 
@@ -250,11 +242,11 @@ class TestMultiHeadAttention:
             multi_head_attention.value_projection,
             multi_head_attention.output_projection,
         ]:
-            expected_weight = torch.full_like(layer.weight, constant_weight_value)
-            assert not torch.allclose(layer.weight, expected_weight)
+            expected_weight = torch.full_like(layer.weight, constant_value)
+            assert not torch.allclose(layer.weight, expected_weight), "Weight reset failed."
             if layer.bias is not None:
-                expected_bias = torch.full_like(layer.bias, constant_bias_value)
-                assert not torch.allclose(layer.bias, expected_bias)
+                expected_bias = torch.full_like(layer.bias, constant_value)
+                assert not torch.allclose(layer.bias, expected_bias), "Bias reset failed."
 
         assert not torch.allclose(multi_head_attention.query_projection.weight, original_query_weight)
         assert not torch.allclose(multi_head_attention.query_projection.bias, original_query_bias)

@@ -172,22 +172,32 @@ class TestEncoderArchitecture:
 
     def test_reset_parameters(self, encoder: Encoder) -> None:
         """Test resetting parameters."""
+        constant_value = 99.0
+
         with torch.no_grad():
-            encoder.embedding.weight.fill_(99.0)
-            if encoder.embedding.bias is not None:
-                encoder.embedding.bias.fill_(99.0)
-            for block in encoder.encoder_blocks:
-                for param in block.parameters():
-                    param.fill_(99.0)
+            for parameter in encoder.parameters():
+                parameter.fill_(constant_value)
+
+        linear_layers = [encoder.embedding]
+        encoder_blocks = encoder.encoder_blocks
+
+        for layer in linear_layers:
+            assert torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), "Weight fill failed."
+            if layer.bias is not None:
+                assert torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias fill failed."
+        for parameter in encoder_blocks.parameters():
+            assert torch.allclose(parameter, torch.full_like(parameter, constant_value)), "Parameter fill failed."
 
         encoder.reset_parameters()
 
-        assert not torch.allclose(encoder.embedding.weight, torch.full_like(encoder.embedding.weight, 99.0))
-        if encoder.embedding.bias is not None:
-            assert not torch.allclose(encoder.embedding.bias, torch.full_like(encoder.embedding.bias, 99.0))
-        for block in encoder.encoder_blocks:
-            for param in block.parameters():
-                assert not torch.allclose(param, torch.full_like(param, 99.0))
+        for layer in linear_layers:
+            assert not torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), (
+                "Weight reset failed."
+            )
+            if layer.bias is not None:
+                assert not torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias reset failed."
+        for parameter in encoder_blocks.parameters():
+            assert not torch.allclose(parameter, torch.full_like(parameter, constant_value)), "Parameter reset failed."
 
 
 @pytest.mark.parametrize("device", constants.DEVICES)
@@ -243,31 +253,33 @@ class TestDecoderArchitecture:
 
     def test_reset_parameters(self, decoder: Decoder) -> None:
         """Test resetting parameters."""
+        constant_value = 99.0
+
         with torch.no_grad():
-            decoder.embedding.weight.fill_(99.0)
-            if decoder.embedding.bias is not None:
-                decoder.embedding.bias.fill_(99.0)
-            decoder.output_projection.weight.fill_(99.0)
-            if decoder.output_projection.bias is not None:
-                decoder.output_projection.bias.fill_(99.0)
-            for block in decoder.decoder_blocks:
-                for param in block.parameters():
-                    param.fill_(99.0)
+            for parameter in decoder.parameters():
+                parameter.fill_(constant_value)
+
+        linear_layers = [decoder.embedding, decoder.output_projection]
+        decoder_blocks = decoder.decoder_blocks
+
+        for layer in linear_layers:
+            assert torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), "Weight fill failed."
+            if layer.bias is not None:
+                assert torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias fill failed."
+        for parameter in decoder_blocks.parameters():
+            assert torch.allclose(parameter, torch.full_like(parameter, constant_value)), (
+                "Decoder block parameter fill failed."
+            )
 
         decoder.reset_parameters()
 
-        assert not torch.allclose(decoder.embedding.weight, torch.full_like(decoder.embedding.weight, 99.0))
-        if decoder.embedding.bias is not None:
-            assert not torch.allclose(decoder.embedding.bias, torch.full_like(decoder.embedding.bias, 99.0))
-        assert not torch.allclose(
-            decoder.output_projection.weight,
-            torch.full_like(decoder.output_projection.weight, 99.0),
-        )
-        if decoder.output_projection.bias is not None:
-            assert not torch.allclose(
-                decoder.output_projection.bias,
-                torch.full_like(decoder.output_projection.bias, 99.0),
+        for layer in linear_layers:
+            assert not torch.allclose(layer.weight, torch.full_like(layer.weight, constant_value)), (
+                "Weight reset failed."
             )
-        for block in decoder.decoder_blocks:
-            for param in block.parameters():
-                assert not torch.allclose(param, torch.full_like(param, 99.0))
+            if layer.bias is not None:
+                assert not torch.allclose(layer.bias, torch.full_like(layer.bias, constant_value)), "Bias reset failed."
+        for parameter in decoder_blocks.parameters():
+            assert not torch.allclose(parameter, torch.full_like(parameter, constant_value)), (
+                "Decoder block parameter reset failed."
+            )

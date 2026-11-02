@@ -75,8 +75,10 @@ class TestEncoderBlock:
             expansion_dimensions=expansion_dimensions,
         ).to(device)
 
-        constant_weight_value = 1.23
-        constant_bias_value = 4.56
+        constant_value = 99.0
+        with torch.no_grad():
+            for parameter in block.parameters():
+                parameter.fill_(constant_value)
 
         mha_layers = [
             block.multihead_attention.query_projection,
@@ -87,17 +89,18 @@ class TestEncoderBlock:
         ffn_layers = [layer for layer in block.feed_forward_network if isinstance(layer, torch.nn.Linear)]
         all_layers = mha_layers + ffn_layers
 
-        with torch.no_grad():
-            for layer in all_layers:
-                layer.weight.fill_(constant_weight_value)
-                if layer.bias is not None:
-                    layer.bias.fill_(constant_bias_value)
+        for layer in all_layers:
+            expected_weight = torch.full_like(layer.weight, constant_value)
+            assert torch.allclose(layer.weight, expected_weight), "Weight fill failed."
+            if layer.bias is not None:
+                expected_bias = torch.full_like(layer.bias, constant_value)
+                assert torch.allclose(layer.bias, expected_bias), "Bias fill failed."
 
         block.reset_parameters()
 
         for layer in all_layers:
-            expected_weight = torch.full_like(layer.weight, constant_weight_value)
-            assert not torch.allclose(layer.weight, expected_weight)
+            expected_weight = torch.full_like(layer.weight, constant_value)
+            assert not torch.allclose(layer.weight, expected_weight), "Weight reset failed."
             if layer.bias is not None:
-                expected_bias = torch.full_like(layer.bias, constant_bias_value)
-                assert not torch.allclose(layer.bias, expected_bias)
+                expected_bias = torch.full_like(layer.bias, constant_value)
+                assert not torch.allclose(layer.bias, expected_bias), "Bias reset failed."
