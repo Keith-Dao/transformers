@@ -5,7 +5,7 @@ import torch
 DEVICES = ["cpu"]
 if torch.cuda.is_available():
     DEVICES.append("cuda")
-if torch.backends.mps.is_available():
+if torch.mps.is_available():
     DEVICES.append("mps")
 if torch.xpu.is_available():
     DEVICES.append("xpu")
