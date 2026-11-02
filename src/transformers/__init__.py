@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from transformers!")
+"""This module contains the transformer pipeline."""

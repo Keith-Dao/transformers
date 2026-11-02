@@ -38,6 +38,10 @@ class TestScaledDotProductAttention:
         key = torch.randn(batch_size, num_heads, seq_k, d_k, device=device).squeeze()
         value = torch.randn(batch_size, num_heads, seq_k, d_v, device=device).squeeze()
 
+        two_dimensional = 2
+        if device == "mps" and query.dim() == two_dimensional:
+            pytest.skip("Torch's scaled_dot_product_attetion implementation for MPS does not work for 2d inputs.")
+
         result = scaled_dot_product_attention(query, key, value, is_causal=is_causal)
         expected = torch.nn.functional.scaled_dot_product_attention(query, key, value, is_causal=is_causal)
         torch.testing.assert_close(result, expected), "Implementation does not match pytorch's."
@@ -113,6 +117,9 @@ class TestScaledDotProductAttention:
     @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64])
     def test_scaled_dot_product_attention_dtypes(self, device: str, is_causal: bool, dtype: torch.dtype) -> None:
         """Test that scaled dot product attention works with various precision."""
+        if device == "mps" and dtype is torch.float64:
+            pytest.skip("Float 64 is not supported on MPS.")
+
         query = torch.randn(2, 4, 8, dtype=dtype, device=device)
         key = torch.randn(2, 6, 8, dtype=dtype, device=device)
         value = torch.randn(2, 6, 16, dtype=dtype, device=device)
@@ -512,6 +519,9 @@ class TestMultiHeadAttention:
         dtype: torch.dtype,
     ) -> None:
         """Test MultiHeadAttention works with different floating point dtypes."""
+        if device == "mps" and dtype is torch.float64:
+            pytest.skip("Float64 is not supported on MPS.")
+
         batch_size = 2
         multi_head_attention = multi_head_attention.to(dtype)
 
@@ -535,6 +545,9 @@ class TestMultiHeadAttention:
         is_causal: bool,
     ) -> None:
         """Test that MultiHeadAttention output matches torch.nn.MultiheadAttention output."""
+        if device == "mps":
+            pytest.skip("MPS has precision issues with torch.nn.MultiheadAttention.")
+
         torch_mha = torch.nn.MultiheadAttention(
             embed_dim=in_features,
             num_heads=num_heads,

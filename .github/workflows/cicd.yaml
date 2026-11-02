@@ -1,0 +1,96 @@
+name: CICD
+run-name: "Running CICD by @${{ github.actor }} (Commit: ${{ github.sha }})."
+on:
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
+      - synchronize
+      - reopened
+    branches:
+      - main
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    env:
+      BASE_PYTHON_VERSION: "3.14"
+      PYTHON_VERSIONS: '["3.14, "3.15"]'
+      UV_VERSION: "0.13.6"
+    outputs:
+      base_python_version: ${{ env.BASE_PYTHON_VERSION }}
+      python_versions: ${{ env.PYTHON_VERSIONS }}
+      uv_version: ${{ env.UV_VERSION }}
+    steps:
+      - run: echo "Setting up config."
+
+  lint-and-format:
+    runs-on: ubuntu-latest
+    needs:
+      - config
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+
+      - name: Install uv and Python ${{ needs.config.outputs.base_python_version }}
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: ${{ needs.config.outputs.uv_version }}
+          python-version: ${{ needs.config.outputs.base_python_version }}
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Run ruff
+        run: |
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
+
+      - name: Run pyrefly
+        run: uv run pyrefly check
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "style: auto-format codebase."
+
+  test:
+    runs-on: ${{ matrix.os }}
+    needs:
+      - config
+      - lint-and-format
+    if: ${{ !github.event.pull_request.draft }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version: ${{ fromJson(needs.config.outputs.python_versions) }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv and Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: ${{ needs.config.outputs.uv_version }}
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install dependencies (${{ needs.config.outputs.base_python_version }})
+        if: matrix.python-version == ${{ needs.config.outputs.base_python_version }}
+        run: uv sync --locked --all-extras --dev
+
+      - name: Install dependencies (Not ${{ needs.config.outputs.base_python_version }})
+        if: matrix.python-version != ${{ needs.config.outputs.base_python_version }}
+        run: uv sync --upgrade --all-extras --dev
+
+      - name: Run tests
+        run: uv run pytest
