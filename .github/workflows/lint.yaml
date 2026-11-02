@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  lint_and_format:
+  lint-and-format:
     runs-on: ubuntu-latest
 
     steps:

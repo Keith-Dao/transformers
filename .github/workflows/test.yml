@@ -12,8 +12,36 @@ on:
       - main
 
 jobs:
+  check-lint-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify linter and formatter passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKFLOW_NAME: "Linter and formatter"
+        run: |
+          echo "Checking '$WORKFLOW_NAME' workflow status for commit: $COMMIT_SHA"
+
+          CONCLUSION=$(gh run list \
+            --workflow "$WORKFLOW_NAME" \
+            --commit "$COMMIT_SHA" \
+            --json conclusion \
+            --jq '.[0].conclusion')
+
+          echo "Workflow conclusion is: $CONCLUSION"
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "❌ The original lint workflow did not succeed (Status: $CONCLUSION)."
+            echo "Please ensure the '$WORKFLOW_NAME' workflow passes before running tests."
+            exit 1
+          fi
+
+          echo "✅ Original lint workflow passed successfully!"
+
   test:
     runs-on: ${{ matrix.os }}
+    needs: check-lint-status
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
