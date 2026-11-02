@@ -1,0 +1,39 @@
+name: Linter and formatter
+run-name: "Running linter and formatter by @${{ github.actor }} (Commit: ${{ github.sha }})."
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  lint_and_format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv and Python 3.14
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Run ruff
+        run: |
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
+
+      - name: Run pyrefly
+        run: pyrefly check
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commmit_message: "style: auto-format codebase."
